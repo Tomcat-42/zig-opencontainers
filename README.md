@@ -1,7 +1,3 @@
-# OCI
+# zig open containers
 
-## How?
-
-## What?
-
-## Why?
+TODO: Doc
