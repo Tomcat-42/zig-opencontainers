@@ -1,5 +1,7 @@
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
+    const target = b.standardTargetOptions(.{ .default_target = .{
+        .abi = .musl,
+    } });
     const optimize = b.standardOptimizeOption(.{});
     const manifest = try zon.parse.fromSlice(
         struct { version: []const u8 },
@@ -21,6 +23,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/runz.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     const oc_deps: []const Import = &.{
@@ -63,10 +66,9 @@ pub fn build(b: *std.Build) !void {
         .root_module = oc_mod,
     });
     const runz = b.addExecutable(.{
-        .linkage = .static,
-        .link_libc = true,
         .name = "runz",
         .root_module = runz_mod,
+        .linkage = .static,
     });
     const runz_tests = b.addTest(.{
         .root_module = runz_mod,
