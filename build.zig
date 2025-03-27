@@ -1,7 +1,15 @@
+const std = @import("std");
+const SemanticVersion = std.SemanticVersion;
+const zon = std.zon;
+const fs = std.fs;
+const Build = std.Build;
+const Step = Build.Step;
+const Module = Build.Module;
+const Import = Module.Import;
+const builtin = @import("builtin");
+
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{ .default_target = .{
-        .abi = .musl,
-    } });
+    const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .musl } });
     const optimize = b.standardOptimizeOption(.{});
     const manifest = try zon.parse.fromSlice(
         struct { version: []const u8 },
@@ -54,11 +62,12 @@ pub fn build(b: *std.Build) !void {
 
     // Targets
     const oc = b.addLibrary(.{
-        .linkage = .static,
         .name = "oc",
         .root_module = oc_mod,
+        .linkage = .static,
     });
     const oc_tests = b.addTest(.{
+        .name = "oc_tests",
         .root_module = oc_mod,
     });
     const oc_check = b.addLibrary(.{
@@ -71,6 +80,7 @@ pub fn build(b: *std.Build) !void {
         .linkage = .static,
     });
     const runz_tests = b.addTest(.{
+        .name = "runz_tests",
         .root_module = runz_mod,
     });
     const runz_check = b.addExecutable(.{
@@ -80,7 +90,9 @@ pub fn build(b: *std.Build) !void {
 
     // Install
     b.installArtifact(oc);
+    b.installArtifact(oc_tests);
     b.installArtifact(runz);
+    b.installArtifact(runz_tests);
 
     // Run
     const run_cmd = b.addRunArtifact(runz);
@@ -107,13 +119,3 @@ pub fn build(b: *std.Build) !void {
     check_step.dependOn(&oc_check.step);
     check_step.dependOn(&runz_check.step);
 }
-
-const std = @import("std");
-const SemanticVersion = std.SemanticVersion;
-const zon = std.zon;
-const fs = std.fs;
-const Build = std.Build;
-const Step = Build.Step;
-const Module = Build.Module;
-const Import = Module.Import;
-const builtin = @import("builtin");

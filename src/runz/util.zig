@@ -17,7 +17,7 @@ pub inline fn syscall(comptime @"fn": anytype, args: anytype) !usize {
         },
         else => |errno| {
             log.err("{s} ({any}) -> {any}", .{ @typeName(@TypeOf(@"fn")), args, errno });
-            return error.SyscallFailed;
+            break :ret error.SyscallFailed;
         },
     };
 }
@@ -42,4 +42,3 @@ pub const sys = @cImport({
     @cInclude("sys/wait.h");
     @cInclude("unistd.h");
 });
-
