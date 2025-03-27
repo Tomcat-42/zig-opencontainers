@@ -2,11 +2,15 @@ const std = @import("std");
 const assert = std.debug.assert;
 const builtin = std.builtin;
 const linux = std.os.linux;
-const log = std.log;
+const Type = builtin.Type;
+
+const runz = @import("runz");
 
 pub inline fn syscall(comptime @"fn": anytype, args: anytype) !usize {
     assert(@typeInfo(@TypeOf(@"fn")) == builtin.Type.@"fn");
     assert(@typeInfo(@TypeOf(args)) == builtin.Type.@"struct" and @typeInfo(@TypeOf(args)).@"struct".is_tuple);
+
+    const log = std.log.scoped(.syscall);
 
     const result: usize = @intCast(@call(.auto, @"fn", args));
 
@@ -20,6 +24,16 @@ pub inline fn syscall(comptime @"fn": anytype, args: anytype) !usize {
             break :ret error.SyscallFailed;
         },
     };
+}
+
+pub fn logger(
+    comptime message_level: std.log.Level,
+    comptime scope: @Type(.enum_literal),
+    comptime format: []const u8,
+    args: anytype
+) void {
+    if (@intFromEnum(message_level) < @intFromEnum(runz.LOG_LEVEL)) return;
+    std.log.defaultLog(message_level, scope, format, args);
 }
 
 pub const sys = @cImport({

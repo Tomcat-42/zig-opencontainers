@@ -1,7 +1,8 @@
 const std = @import("std");
+const math = @import("math");
 const process = std.process;
 const io = std.io;
-const log = std.log;
+const log = std.log.scoped(.runz);
 const heap = std.heap;
 const builtin = @import("builtin");
 
@@ -9,19 +10,27 @@ const clap = @import("clap");
 const oc = @import("oc");
 
 pub const util = @import("runz/util.zig");
-const Run = @import("runz/Run.zig");
+
+pub var LOG_LEVEL = std.log.default_level;
+pub const std_options: std.Options = .{
+    .logFn = util.logger,
+};
+
+pub const stdout = io.getStdOut().writer();
+pub const stderr = io.getStdErr().writer();
+
+const Command = @import("runz/Command.zig");
 
 const params = clap.parseParamsComptime(
-    \\-v, --verbosity                  Set the verbosity level (can be repeated)
-    \\-V, --version                    Print the version and exit
+    \\-V, --verbosity                  Set the verbosity level (can be repeated)
+    \\-v, --version                    Print the version and exit
     \\-h, --help                       Print this message and exit
     \\<command>
-    \\    run <image> <cmd> [args...]  Run a container from the image
+    \\    run  <image> <cmd> [args...]  Run a container from the image
+    \\    pull <image>                  Pull the image from the registry
 );
-const Command = enum { help, version, run };
-const parsers = .{ .command = clap.parsers.enumeration(Command) };
+const parsers = .{ .command = clap.parsers.enumeration(Command.Tag) };
 const Args = clap.ResultEx(clap.Help, &params, &parsers);
-
 pub fn main() !void {
     var debug_allocator: heap.DebugAllocator(.{}) = .init;
     const gpa, const is_debug = gpa: {
@@ -37,34 +46,29 @@ pub fn main() !void {
     };
     var arena = heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
-    const ally = arena.allocator();
+    const allocator = arena.allocator();
 
-    var iter = try process.ArgIterator.initWithAllocator(ally);
+    var iter = try process.ArgIterator.initWithAllocator(allocator);
+    errdefer iter.deinit();
     _ = iter.next();
 
-    const options = clap.parseEx(clap.Help, &params, &parsers, &iter, .{
+    var options = clap.parseEx(clap.Help, &params, &parsers, &iter, .{
         .diagnostic = null,
-        .allocator = ally,
+        .allocator = allocator,
         .terminating_positional = 0,
     }) catch usage();
+    errdefer options.deinit();
+
     if (options.args.help != 0) return help();
-    if (options.args.version != 0) return help();
+    if (options.args.version != 0) return version();
+    if (options.args.verbosity != 0) LOG_LEVEL = @enumFromInt(std.math.clamp(options.args.verbosity, 0, 3));
+    const tag = options.positionals[0] orelse usage();
 
-    const logLevel: log.Level = @enumFromInt(options.args.verbosity);
-    _ = logLevel; // autofix
-
-    var command = switch (options.positionals[0] orelse usage()) {
-        .help => return help(),
-        .version => return version(),
-        .run => try Run.init(ally, &iter),
-    };
-    defer command.deinit();
+    var command = try Command.init(tag, .{ allocator, &iter });
+    errdefer command.deinit();
 
     return command.run();
 }
-
-const stdout = io.getStdOut().writer();
-const stderr = io.getStdErr().writer();
 
 inline fn usage() noreturn {
     clap.usage(stderr, clap.Help, &params) catch @panic("failed to write usage message");

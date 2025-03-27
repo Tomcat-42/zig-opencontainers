@@ -3,7 +3,7 @@ const mem = std.mem;
 const fmt = std.fmt;
 const process = std.process;
 const linux = std.os.linux;
-const log = std.log;
+const log = std.log.scoped(.run);
 const posix = std.posix;
 
 const clap = @import("clap");
@@ -35,7 +35,7 @@ pub fn init(allocator: mem.Allocator, args: *process.ArgIterator) !@This() {
             .allocator = allocator,
         },
     ) catch usage();
-    defer options.deinit();
+    errdefer options.deinit();
 
     if (options.args.help != 0) help();
     const path = options.positionals[0] orelse usage();
@@ -104,7 +104,7 @@ pub fn run(this: *const @This()) !void {
 
     // Make this.path/.oldrootfs
     const old_root = try fmt.allocPrintZ(this.allocator, "{s}/{s}", .{ this.path, ".oldrootfs" });
-    defer this.allocator.free(old_root);
+    errdefer this.allocator.free(old_root);
     _ = try util.syscall(linux.mkdir, .{ old_root, 0o755 });
 
     // Change the root filesystem to this.path
@@ -135,23 +135,20 @@ pub fn run(this: *const @This()) !void {
     log.err("execvpe({?s}, {?any}, {?any}) -> {!}", .{ this.cmd[0], this.cmd, this.env, execve });
 }
 
-const stdout = std.io.getStdOut().writer();
-const stderr = std.io.getStdErr().writer();
-
 inline fn usage() noreturn {
-    clap.usage(stderr, clap.Help, &params) catch @panic("failed to write usage message");
-    stderr.writeByte('\n') catch @panic("failed to write newline");
+    clap.usage(runz.stderr, clap.Help, &params) catch @panic("failed to write usage message");
+    runz.stderr.writeByte('\n') catch @panic("failed to write newline");
     process.exit(0);
 }
 
 inline fn help() noreturn {
-    clap.help(stdout, clap.Help, &params, .{
+    clap.help(runz.stdout, clap.Help, &params, .{
         .markdown_lite = false,
         .spacing_between_parameters = 1,
         .description_on_new_line = true,
         .description_indent = 2,
         .indent = 2,
     }) catch @panic("failed to write help message");
-    stdout.writeByte('\n') catch @panic("failed to write newline");
+    runz.stdout.writeByte('\n') catch @panic("failed to write newline");
     process.exit(0);
 }
